@@ -1,0 +1,43 @@
+name: build-onnx-release-dl
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Build + publish release (container)
+        run: |
+          set -o pipefail
+          docker run --privileged -e GH_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+            -v $PWD:/src -w /src ghcr.io/termux/package-builder \
+            bash -c "
+              ./build-package.sh -f -I onnxruntime 2>&1 | tail -5
+              W=\$(find /data -name 'onnxruntime-*.whl' 2>/dev/null | head -1)
+              echo '=== wheel: '\$W
+              [ -z \"\$W\" ] && echo '❌ NO WHEEL' && exit 1
+              command -v gh >/dev/null || (apt-get update -qq && apt-get install -y -qq gh 2>&1 | tail -2)
+              gh release create onnxruntime-1.28.0-termux \"\$W\" \
+                -R ook826092-cloud/wheel-forge \
+                --title 'onnxruntime 1.28.0 (Termux bionic aarch64)' \
+                --notes 'termux-packages 官方构建 · android_arm64_v8a wheel' 2>&1 | tail -3
+              echo '=== ✅ Release 已发布'
+            "
+      - name: Download release back to host (double insurance)
+        run: |
+          mkdir -p wheel-download
+          gh release download onnxruntime-1.28.0-termux -R ook826092-cloud/wheel-forge \
+            -D wheel-download --clobber 2>&1 | tail -2
+          ls -la wheel-download/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ort-wheel-host-download
+          path: wheel-download/**
