@@ -18,5 +18,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: termux-onnxruntime-deb
-          path: debs/*.deb
+          name: termux-onnxruntime-wheel
+          path: |
+            debs/*.deb
+            **/*.whl
