@@ -1,0 +1,32 @@
+name: build-llama-cpp-aarch64
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: master
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+      - name: Build static aarch64
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DLLAMA_STATIC=ON -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=ON
+          cmake --build build -j $(nproc)
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-cpp-aarch64
+          path: |
+            build/bin/llama-cli
+            build/bin/llama-server
+            build/bin/llama-embedding
+            build/bin/llama-quantize
