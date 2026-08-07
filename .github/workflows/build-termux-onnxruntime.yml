@@ -1,0 +1,21 @@
+name: build-termux-onnxruntime
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Build onnxruntime with termux-packages
+        run: |
+          ./scripts/run-docker.sh ./build-package.sh -f -I onnxruntime 2>&1 | tail -40
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: termux-onnxruntime-deb
+          path: debs/*.deb
