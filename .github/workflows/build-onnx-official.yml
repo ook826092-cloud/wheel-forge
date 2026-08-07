@@ -14,19 +14,18 @@ jobs:
         with:
           repository: termux/termux-packages
           ref: master
-      - name: Load Docker image (official)
+      - name: Load Docker image
         run: ./scripts/run-docker.sh true
-      - name: Build onnxruntime (official: -I -C -a aarch64)
+      - name: Build onnxruntime official
         run: |
           set -o pipefail
           ./scripts/run-docker.sh -d ./build-package.sh -I -C -a aarch64 onnxruntime 2>&1 | tail -20
-      - name: Generate build artifacts (official step)
+      - name: Generate build artifacts
         run: |
           test -d termux-packages/output && mv termux-packages/output/* ./output/ || true
           mkdir -p debs
-          find . -name "onnxruntime*.deb" 2>/dev/null | head -5
-          cp $(find . -name "onnxruntime*.deb" 2>/dev/null | head -1) debs/ 2>/dev/null || echo "无 deb"
-          ls -la debs/ output/ 2>/dev/null | head -12
+          cp $(find . -name "onnxruntime*.deb" 2>/dev/null | head -1) debs/ 2>/dev/null || echo "no deb found"
+          ls -la debs/ output/ 2>/dev/null | head -10
       - uses: actions/upload-artifact@v4
         with:
           name: ort-official-deb
