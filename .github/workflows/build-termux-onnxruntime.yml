@@ -36,9 +36,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          find . -name "*.deb" | head -6
-          gh release create onnxruntime-termux-1.28.0 $(find . -name "*.deb" | head -4) \
+          set -o pipefail
+          # 去重：只传 output/ 的 2 个 deb（collected 是副本）
+          DEBS=$(find output -name "*.deb" 2>/dev/null | head -2)
+          echo "上传文件: $DEBS"
+          # 幂等：已存在则删除重建
+          gh release delete onnxruntime-termux-1.28.0 --yes -R ook826092-cloud/wheel-forge 2>/dev/null || true
+          gh release create onnxruntime-termux-1.28.0 $DEBS \
             -R ook826092-cloud/wheel-forge --title "onnxruntime 1.28.0 (Termux bionic)" \
-            --notes "termux-packages 官方构建 · aarch64 · dpkg -i 安装" 2>&1 | tail -2 \
-          || gh release upload onnxruntime-termux-1.28.0 $(find . -name "*.deb" | head -4) --clobber \
-            -R ook826092-cloud/wheel-forge 2>&1 | tail -2
+            --notes "termux-packages 官方构建 · aarch64 · dpkg -i 安装" 2>&1 | tail -3
