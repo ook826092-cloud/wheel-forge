@@ -16,7 +16,7 @@ jobs:
           ref: master
       - name: Load docker image (official)
         run: ./scripts/run-docker.sh true
-      - name: Build onnxruntime (official: -I -C -a aarch64)
+      - name: Build onnxruntime official-flow
         run: |
           set -o pipefail
           ./scripts/run-docker.sh -d ./build-package.sh -I -C -a aarch64 onnxruntime 2>&1 | tail -20
