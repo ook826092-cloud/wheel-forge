@@ -11,14 +11,21 @@ jobs:
         with:
           repository: termux/termux-packages
           ref: master
-      - name: Build onnxruntime with termux-packages
+      - name: Build onnxruntime (mount termux dirs)
         run: |
           set -o pipefail
-          ./scripts/run-docker.sh ./build-package.sh -f -I onnxruntime 2>&1 | tail -60
+          ./scripts/run-docker.sh -m ./build-package.sh -f -I onnxruntime 2>&1 | tail -30
+      - name: Collect artifacts
+        run: |
+          echo "=== 搜索产物 ==="
+          find /data/data/com.termux/files/usr -name "*.whl" 2>/dev/null | head -5
+          find debs -name "*.deb" 2>/dev/null | head -5
+          mkdir -p collected
+          cp $(find /data/data/com.termux/files/usr -name "onnxruntime-*.whl" 2>/dev/null | head -1) collected/ 2>/dev/null || echo "no whl in prefix"
+          cp debs/*.deb collected/ 2>/dev/null || echo "no deb"
+          ls -la collected/
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: termux-onnxruntime-wheel
-          path: |
-            debs/*.deb
-            **/*.whl
+          path: collected/**
