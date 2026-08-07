@@ -1,0 +1,30 @@
+name: build-onnxruntime-aarch64
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: microsoft/onnxruntime
+          ref: v1.28.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake
+          python -m pip install --upgrade pip setuptools wheel numpy cython
+      - name: Build wheel
+        run: |
+          python tools/ci_build/build.py --build_dir build --config Release \
+            --build_wheel --skip_tests --cmake_generator Ninja --parallel
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnxruntime-aarch64-cp314
+          path: build/Release/dist/*.whl
