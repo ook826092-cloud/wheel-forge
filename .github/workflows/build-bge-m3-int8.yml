@@ -10,11 +10,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
-      - name: Download prebuilt bge-m3 int8 from HF
+      - name: Download bge-m3 int8 (Python API)
         run: |
           pip install -q huggingface_hub
-          huggingface-cli download gpahal/bge-m3-onnx-int8 --local-dir bge-m3-int8
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          p = snapshot_download(repo_id="gpahal/bge-m3-onnx-int8", local_dir="bge-m3-int8")
+          print("下载完成:", p)
+          PY
           du -sh bge-m3-int8
+          ls -la bge-m3-int8 | head
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
