@@ -7,22 +7,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-      - name: Download onnxruntime wheel from TUR PyPI (android platform)
+      - name: Inspect TUR PyPI index for onnxruntime
         run: |
-          pip install --no-deps --platform android_24_arm64_v8a --python-version 3.14 \
-            --target ort-tur --only-binary=:all: \
-            --extra-index-url https://termux-user-repository.github.io/pypi/ \
-            onnxruntime 2>&1 | tail -4
-          ls -la ort-tur/ | head -8
-          find ort-tur -name "*.so" | head -5
-      - name: Package
+          echo "=== TUR index onnxruntime ==="
+          curl -s https://termux-user-repository.github.io/pypi/onnxruntime/ | grep -oE 'onnxruntime-[^"<]+\.whl' | sort -u | head -20
+      - name: Download matching android wheel
         run: |
-          tar -czf ort-tur.tar.gz ort-tur/
-          ls -la ort-tur.tar.gz
+          # 尝试几种平台 tag（pip 自动探测）
+          for plat in android_24_arm64_v8a android_arm64_v8a android_21_arm64_v8a; do
+            echo "=== 尝试 --platform $plat ==="
+            pip download --no-deps --platform $plat --python-version 3.14 --only-binary=:all: \
+              --extra-index-url https://termux-user-repository.github.io/pypi/ \
+              onnxruntime -d ort-tur 2>&1 | tail -2
+            ls ort-tur/*.whl 2>/dev/null && break
+          done
+          ls -la ort-tur/ 2>/dev/null || echo "所有 tag 都失败"
       - uses: actions/upload-artifact@v4
         with:
           name: ort-tur-wheel
-          path: ort-tur.tar.gz
+          path: ort-tur/**
+          if-no-files-found: warn
