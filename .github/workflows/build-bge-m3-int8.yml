@@ -1,0 +1,29 @@
+name: build-bge-m3-int8
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install "optimum[exporters]" onnxruntime transformers sentencepiece torch --index-url https://download.pytorch.org/whl/cpu 2>/dev/null || pip install "optimum[exporters]" onnxruntime transformers sentencepiece torch
+      - name: Export ONNX (fp32)
+        run: optimum-cli export onnx -m BAAI/bge-m3 --task feature-extraction bge-m3-onnx
+      - name: Quantize INT8
+        run: optimum-cli onnxruntime quantize --onnx_model bge-m3-onnx --per_channel -o bge-m3-int8
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bge-m3-onnx-int8
+          path: |
+            bge-m3-int8/*.onnx*
+            bge-m3-int8/tokenizer*
+            bge-m3-int8/sentencepiece*
+            bge-m3-int8/*.json
