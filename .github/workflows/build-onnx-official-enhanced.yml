@@ -1,0 +1,46 @@
+name: build-onnx-official-enhanced
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Load docker image (official)
+        run: ./scripts/run-docker.sh true
+      - name: Build with official params + mount build dir + grab wheel
+        run: |
+          set -o pipefail
+          mkdir -p $HOME/.termux-build
+          docker run --privileged -v $PWD:/src -v $HOME/.termux-build:/home/builder/.termux-build \
+            -w /src ghcr.io/termux/package-builder bash -c "
+            ./build-package.sh -I -C -a aarch64 onnxruntime 2>&1 | tail -12
+            echo '=== 搜索 wheel (build dir) ==='
+            find /home/builder/.termux-build -name 'onnxruntime-*.whl' 2>/dev/null | head -3
+            cp $(find /home/builder/.termux-build -name 'onnxruntime-*.whl' 2>/dev/null | head -1) /src/ 2>/dev/null
+            echo '=== 搜索 deb ==='
+            find /src -name '*.deb' 2>/dev/null | head -3
+          "
+      - name: Show results
+        run: |
+          echo '=== wheel on host ==='
+          ls -la *.whl 2>/dev/null || echo 'no whl on host'
+          echo '=== deb on host ==='
+          find . -name '*.deb' 2>/dev/null | head -3
+          echo '=== build dir whl ==='
+          find $HOME/.termux-build -name 'onnxruntime-*.whl' 2>/dev/null | head -2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ort-official-enhanced
+          path: |
+            *.whl
+            **/*.deb
+          if-no-files-found: warn
