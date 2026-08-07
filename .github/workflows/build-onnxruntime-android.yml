@@ -1,0 +1,31 @@
+name: build-onnxruntime-android
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: microsoft/onnxruntime
+          ref: v1.28.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install Android NDK
+        run: |
+          curl -sL -o ndk.zip https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+          unzip -q ndk.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26d" >> $GITHUB_ENV
+      - name: Build Android arm64 wheel (bionic)
+        run: |
+          pip install --upgrade pip numpy wheel setuptools cython
+          python tools/ci_build/build.py --android --android_abi arm64-v8a \
+            --build_wheel --config Release --skip_tests --build_dir build 2>&1 | tail -5
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnxruntime-android-arm64
+          path: build/Release/dist/*.whl
