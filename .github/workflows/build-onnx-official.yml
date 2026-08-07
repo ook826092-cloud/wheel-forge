@@ -1,0 +1,36 @@
+name: build-onnx-official
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Load Docker image (official)
+        run: ./scripts/run-docker.sh true
+      - name: Build onnxruntime (official flow: -I -C -a aarch64)
+        run: |
+          set -o pipefail
+          ./scripts/run-docker.sh -d ./build-package.sh -I -C -a aarch64 onnxruntime 2>&1 | tail -20
+      - name: Generate build artifacts (official step)
+        run: |
+          test -d termux-packages/output && mv termux-packages/output/* ./output/ || true
+          mkdir -p debs
+          find output -name "onnxruntime*.deb" -o -name "*.deb" 2>/dev/null | head -10
+          cp $(find output -name "*.deb" 2>/dev/null | head -1) debs/ 2>/dev/null || echo "output 无 deb"
+          ls -la debs/ output/ 2>/dev/null | head -15
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ort-official-deb
+          path: |
+            debs/**
+            output/**
+          if-no-files-found: warn
