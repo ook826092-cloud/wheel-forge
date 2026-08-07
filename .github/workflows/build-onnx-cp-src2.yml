@@ -1,0 +1,27 @@
+name: build-onnx-cp-src2
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Build (privileged), cp wheel to /src
+        run: |
+          set -o pipefail
+          docker run --privileged --name tb2 -v $PWD:/src -w /src \
+            ghcr.io/termux/package-builder \
+            bash -c "./build-package.sh -f -I onnxruntime 2>&1 | tail -8; \
+                    W=\$(find /data -name 'onnxruntime-*.whl' 2>/dev/null | head -1); \
+                    echo 'wheel: '\$W; [ -n \"\$W\" ] && cp \$W /src/; \
+                    ls -la /src/*.whl 2>/dev/null || echo '无 whl'"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ort-wheel-cp-src2
+          path: "*.whl"
+          if-no-files-found: warn
