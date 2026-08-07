@@ -4,7 +4,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
@@ -13,7 +13,8 @@ jobs:
           ref: master
       - name: Build onnxruntime with termux-packages
         run: |
-          ./scripts/run-docker.sh ./build-package.sh -f -I onnxruntime 2>&1 | tail -40
+          set -o pipefail
+          ./scripts/run-docker.sh ./build-package.sh -f -I onnxruntime 2>&1 | tail -60
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
