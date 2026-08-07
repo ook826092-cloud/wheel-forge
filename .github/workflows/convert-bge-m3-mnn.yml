@@ -1,0 +1,36 @@
+name: convert-bge-m3-mnn
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Download bge-m3 int8 onnx
+        run: |
+          pip install -q huggingface_hub
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download("gpahal/bge-m3-onnx-int8", local_dir="model")
+          PY
+          ls -la model/
+      - name: Get MNN tools
+        run: |
+          curl -sL -o mnn.zip https://github.com/alibaba/MNN/releases/download/3.6.1/mnn_3.6.1_linux_x64_cpu_opencl_vulkan.zip
+          unzip -q mnn.zip -d mnn
+          find mnn -name "MNNConvert" -o -name "*.so" | head -5
+      - name: Convert ONNX to MNN
+        run: |
+          CONV=$(find mnn -name MNNConvert | head -1)
+          echo "MNNConvert: $CONV"
+          $CONV -f ONNX --modelFile model/model_quantized.onnx --MNNModel bge-m3-int8.mnn --bizCode bge-m3 2>&1 | tail -15
+          ls -la bge-m3-int8.mnn
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bge-m3-mnn
+          path: bge-m3-int8.mnn
