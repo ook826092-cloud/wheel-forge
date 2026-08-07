@@ -1,0 +1,64 @@
+name: machine-info
+on:
+  workflow_dispatch:
+
+jobs:
+  x64:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Collect ALL system info (x64)
+        run: |
+          echo "===== 系统信息 ====="
+          uname -a
+          cat /etc/os-release | grep -E "PRETTY_NAME|VERSION"
+          echo
+          echo "===== CPU ====="
+          echo "逻辑核: $(nproc)"
+          lscpu | grep -E "Model name|Architecture|CPU\(s\):|Thread|Core|Socket|CPU MHz|L3 cache" | head -10
+          grep "model name" /proc/cpuinfo | head -1
+          echo
+          echo "===== 内存 ====="
+          free -h | head -2
+          echo
+          echo "===== 磁盘 ====="
+          df -h / | tail -1
+          echo
+          echo "===== 工具链 ====="
+          gcc --version | head -1
+          ldd --version | head -1
+          python3 --version
+          cmake --version | head -1
+          echo
+          echo "===== 云厂商/IP ====="
+          hostname
+          cat /sys/class/dmi/id/sys_vendor 2>/dev/null || echo "无 DMI"
+
+  arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Collect ALL system info (arm64)
+        run: |
+          echo "===== 系统信息 ====="
+          uname -a
+          cat /etc/os-release | grep -E "PRETTY_NAME|VERSION"
+          echo
+          echo "===== CPU ====="
+          echo "逻辑核: $(nproc)"
+          lscpu | grep -E "Model name|Architecture|CPU\(s\):|Thread|Core|Socket|CPU MHz|L3 cache" | head -10
+          grep "model name" /proc/cpuinfo | head -1
+          echo
+          echo "===== 内存 ====="
+          free -h | head -2
+          echo
+          echo "===== 磁盘 ====="
+          df -h / | tail -1
+          echo
+          echo "===== 工具链 ====="
+          gcc --version | head -1
+          ldd --version | head -1
+          python3 --version
+          cmake --version | head -1
+          echo
+          echo "===== 云厂商/IP ====="
+          hostname
+          cat /sys/class/dmi/id/sys_vendor 2>/dev/null || echo "无 DMI"
