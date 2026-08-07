@@ -5,7 +5,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -18,16 +18,22 @@ jobs:
           snapshot_download("gpahal/bge-m3-onnx-int8", local_dir="model")
           PY
           ls -la model/
-      - name: Get MNN tools
+      - name: Checkout MNN source
+        uses: actions/checkout@v4
+        with:
+          repository: alibaba/MNN
+          ref: 3.6.1
+          path: mnn-src
+      - name: Build MNNConvert
         run: |
-          curl -sL -o mnn.zip https://github.com/alibaba/MNN/releases/download/3.6.1/mnn_3.6.1_linux_x64_cpu_opencl_vulkan.zip
-          unzip -q mnn.zip -d mnn
-          find mnn -name "MNNConvert" -o -name "*.so" | head -5
+          sudo apt-get update
+          sudo apt-get install -y libprotobuf-dev protobuf-compiler
+          cd mnn-src && mkdir -p build && cd build
+          cmake .. -DMNN_BUILD_CONVERTER=ON -DMNN_BUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+          make MNNConvert -j$(nproc) 2>&1 | tail -3
       - name: Convert ONNX to MNN
         run: |
-          CONV=$(find mnn -name MNNConvert | head -1)
-          echo "MNNConvert: $CONV"
-          $CONV -f ONNX --modelFile model/model_quantized.onnx --MNNModel bge-m3-int8.mnn --bizCode bge-m3 2>&1 | tail -15
+          ./mnn-src/build/MNNConvert -f ONNX --modelFile model/model_quantized.onnx --MNNModel bge-m3-int8.mnn --bizCode bge-m3 2>&1 | tail -20
           ls -la bge-m3-int8.mnn
       - name: Upload artifact
         uses: actions/upload-artifact@v4
