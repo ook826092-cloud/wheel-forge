@@ -23,7 +23,7 @@ jobs:
         run: |
           pip install --upgrade pip numpy wheel setuptools cython
           python tools/ci_build/build.py --android --android_abi arm64-v8a \
-            --build_wheel --config Release --skip_tests --build_dir build 2>&1 | tail -5
+            --build_wheel --config Release --skip_tests --build_dir build --verbose 2>&1 | tail -80
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
