@@ -11,15 +11,22 @@ jobs:
         with:
           repository: termux/termux-packages
           ref: master
-      - name: Build (privileged), cp wheel to /src
+      - name: Build (privileged), find wheel ANYWHERE, cp to /src
         run: |
           set -o pipefail
           docker run --privileged --name tb2 -v $PWD:/src -w /src \
             ghcr.io/termux/package-builder \
-            bash -c "./build-package.sh -f -I onnxruntime 2>&1 | tail -8; \
-                    W=\$(find /data -name 'onnxruntime-*.whl' 2>/dev/null | head -1); \
-                    echo 'wheel: '\$W; [ -n \"\$W\" ] && cp \$W /src/; \
-                    ls -la /src/*.whl 2>/dev/null || echo '无 whl'"
+            bash -c "
+              ./build-package.sh -f -I -a aarch64 onnxruntime 2>&1 | tail -6
+              echo '=== 全盘搜索 wheel ==='
+              W=\$(find / -name 'onnxruntime-*.whl' 2>/dev/null | head -1)
+              echo 'FOUND: '\$W
+              [ -n "\$W" ] && cp \$W /src/ && echo '✅ 已复制到 /src'
+              ls -la /src/*.whl 2>/dev/null || echo '未找到 whl'
+            "
+      - name: Show host result
+        run: |
+          ls -la *.whl 2>/dev/null || echo '宿主无 whl'
       - uses: actions/upload-artifact@v4
         with:
           name: ort-wheel-cp-src2
