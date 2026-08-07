@@ -1,0 +1,35 @@
+name: build-onnx-tar-all
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Build with -m mount
+        run: |
+          set -o pipefail
+          ./scripts/run-docker.sh -m ./build-package.sh -f -I onnxruntime 2>&1 | tail -15
+      - name: Tar ALL candidate artifact locations
+        run: |
+          mkdir -p out
+          echo "=== 候选位置 ==="
+          ls -la $HOME/.termux-build/onnxruntime/src/dist/*.whl 2>/dev/null || echo "无 .termux-build dist"
+          ls -la debs/*.deb 2>/dev/null || echo "无 debs"
+          ls -d /data/data/com.termux/files/usr/lib/python3.14/site-packages/onnxruntime* 2>/dev/null || echo "无 site-packages"
+          # 无脑打包所有可能位置
+          tar -czf out/artifacts.tar.gz \
+            $HOME/.termux-build/onnxruntime/src/dist/ 2>/dev/null || true
+          tar -czf out/artifacts2.tar.gz \
+            /data/data/com.termux/files/usr/lib/python3.14/site-packages/onnxruntime* 2>/dev/null || true
+          tar -czf out/artifacts3.tar.gz debs/ 2>/dev/null || true
+          ls -la out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ort-tar-all
+          path: out/*.tar.gz
