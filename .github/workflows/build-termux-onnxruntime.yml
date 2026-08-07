@@ -2,6 +2,9 @@ name: build-termux-onnxruntime
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -11,21 +14,31 @@ jobs:
         with:
           repository: termux/termux-packages
           ref: master
-      - name: Build onnxruntime (mount termux dirs)
+      - name: Load docker image (official)
+        run: ./scripts/run-docker.sh true
+      - name: Build onnxruntime (official: -I -C -a aarch64)
         run: |
           set -o pipefail
-          ./scripts/run-docker.sh -m ./build-package.sh -f -I onnxruntime 2>&1 | tail -30
-      - name: Collect artifacts
+          ./scripts/run-docker.sh -d ./build-package.sh -I -C -a aarch64 onnxruntime 2>&1 | tail -20
+      - name: Collect deb artifacts
         run: |
-          echo "=== 搜索产物 ==="
-          find /data/data/com.termux/files/usr -name "*.whl" 2>/dev/null | head -5
-          find debs -name "*.deb" 2>/dev/null | head -5
+          test -d termux-packages/output && mv termux-packages/output/* ./output/ || true
           mkdir -p collected
-          cp $(find /data/data/com.termux/files/usr -name "onnxruntime-*.whl" 2>/dev/null | head -1) collected/ 2>/dev/null || echo "no whl in prefix"
-          cp debs/*.deb collected/ 2>/dev/null || echo "no deb"
+          cp debs/*.deb collected/ 2>/dev/null || true
+          cp output/*.deb collected/ 2>/dev/null || true
           ls -la collected/
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: termux-onnxruntime-wheel
+          name: termux-onnxruntime-debs
           path: collected/**
+          if-no-files-found: warn
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          find . -name "*.deb" | head -6
+          gh release create onnxruntime-termux-1.28.0 $(find . -name "*.deb" | head -4) \
+            -R ook826092-cloud/wheel-forge --title "onnxruntime 1.28.0 (Termux bionic)" \
+            --notes "termux-packages 官方构建 · aarch64 · dpkg -i 安装" 2>&1 | tail -2 \
+          || gh release upload onnxruntime-termux-1.28.0 $(find . -name "*.deb" | head -4) --clobber \
+            -R ook826092-cloud/wheel-forge 2>&1 | tail -2
