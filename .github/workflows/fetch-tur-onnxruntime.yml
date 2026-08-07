@@ -1,0 +1,28 @@
+name: fetch-tur-onnxruntime
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Download onnxruntime wheel from TUR PyPI (android platform)
+        run: |
+          pip install --no-deps --platform android_24_arm64_v8a --python-version 3.14 \
+            --target ort-tur --only-binary=:all: \
+            --extra-index-url https://termux-user-repository.github.io/pypi/ \
+            onnxruntime 2>&1 | tail -4
+          ls -la ort-tur/ | head -8
+          find ort-tur -name "*.so" | head -5
+      - name: Package
+        run: |
+          tar -czf ort-tur.tar.gz ort-tur/
+          ls -la ort-tur.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ort-tur-wheel
+          path: ort-tur.tar.gz
