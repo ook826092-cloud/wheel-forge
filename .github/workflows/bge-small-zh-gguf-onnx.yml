@@ -28,24 +28,28 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/ggml-org/llama.cpp
           pip install --quiet -e ./llama.cpp/gguf-py
-      - name: Patch BERT tokenizer hash (bge uses WordPiece)
+      - name: Patch BERT tokenizer hash (compute via official CHK_TXT)
         run: |
+          pip install --quiet transformers
           python - <<'PY'
+          import hashlib, sys
+          sys.path.insert(0, 'llama.cpp')
+          from convert_hf_to_gguf_update import CHK_TXT
+          from transformers import AutoTokenizer
           p = 'llama.cpp/conversion/base.py'
           src = open(p).read()
-          h = '56a3532a4cda32cf10d09834e0cdeee45c407d750b868651e44e2eebdcc721ed'
-          if h not in src:
-              # 字符串定位 get_vocab_base_pre 签名结束 '):'（避开正则转义问题）
+          tok = AutoTokenizer.from_pretrained('./bge-model')
+          chkhsh = hashlib.sha256(str(tok.encode(CHK_TXT)).encode()).hexdigest()
+          print('computed hash:', chkhsh)
+          if chkhsh not in src:
               idx = src.find('def get_vocab_base_pre')
-              if idx == -1:
-                  raise SystemExit('def not found')
               eol = src.find('):', idx)
-              if eol == -1:
-                  raise SystemExit('): not found')
-              ins = '\n        if chkhsh == "' + h + '":\n            return "bert"\n'
+              if idx == -1 or eol == -1:
+                  raise SystemExit('signature not found')
+              ins = '\n        if chkhsh == "' + chkhsh + '":\n            return "bert"\n'
               src = src[:eol+2] + ins + src[eol+2:]
               open(p, 'w').write(src)
-              print('patched (after ): at', eol)
+              print('patched with computed hash')
           else:
               print('hash already present')
           PY
