@@ -1,0 +1,33 @@
+name: fetch-bge-base-zh
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet huggingface_hub
+      - name: Download Xenova/bge-base-zh-v1.5 ONNX (reliable)
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          p = snapshot_download('Xenova/bge-base-zh-v1.5', local_dir='./onnx')
+          print('onnx:', p)
+          PY
+          find ./onnx -type f -exec ls -la {} \; | head -30
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=bge-base-zh-v1.5-onnx-ready
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(find ./onnx -type f ! -name '*.lock' | tr '\n' ' ')"
+          gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "bge-base-zh-v1.5 (768d) ONNX by Xenova" $FILES
+          echo "published: $TAG"
