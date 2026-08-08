@@ -37,6 +37,6 @@ jobs:
         run: |
           TAG=bge-small-zh-v1.5-gguf-onnx-ready
           gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
-          FILES="$(find ./gguf -name '*.gguf' | tr '\n' ' ') $(find ./onnx -type f | tr '\n' ' ')"
+          FILES="$(find ./gguf -name '*.gguf' | tr '\n' ' ') $(find ./onnx -type f ! -name '*.lock' | tr '\n' ' ')"
           gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "bge-small-zh-v1.5 GGUF+ONNX (community ready)" $FILES
           echo "published: $TAG"
