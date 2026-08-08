@@ -1,0 +1,41 @@
+name: build-tokenizers-termux
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Load Docker image (official termux build env)
+        run: ./scripts/run-docker.sh true
+      - name: Get TUR python-tokenizers build.sh
+        run: |
+          mkdir -p packages/python-tokenizers
+          curl -sL -o packages/python-tokenizers/build.sh \
+            "https://raw.githubusercontent.com/termux-user-repository/tur/master/tur/python-tokenizers/build.sh"
+          ls -la packages/python-tokenizers/
+      - name: Build python-tokenizers (official build system)
+        run: |
+          set -o pipefail
+          ./scripts/run-docker.sh -d ./build-package.sh -I -C -a aarch64 python-tokenizers 2>&1 | tail -20
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          cp $(find . -name "python-tokenizers*.deb" -o -name "tokenizers*.whl" 2>/dev/null | head -5) out/ 2>/dev/null || echo "no deb/whl found"
+          find . -name "*.deb" -path "*output*" | head -5
+          ls -la out/ 2>/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokenizers-termux
+          path: |
+            out/**
+            debs/**
+          if-no-files-found: warn
