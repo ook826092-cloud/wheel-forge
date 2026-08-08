@@ -36,6 +36,6 @@ jobs:
         run: |
           TAG=gte-base-zh-ready
           gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
-          FILES="$(find ./gguf -name '*.gguf' | tr '\n' ' ') $(find ./onnx -type f \( -name '*.onnx*' -o -name '*.json' -o -name '*.txt' -o -name '*.model' -o -name '*.bin' \) | tr '\n' ' ')"
+          FILES="$(find ./gguf -name '*.gguf' | tr '\n' ' ') $(find ./onnx -type f ! -name '*.lock' \( -name '*.onnx*' -o -name '*.json' -o -name '*.txt' -o -name '*.model' -o -name '*.bin' \) | tr '\n' ' ')"
           gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "gte-base-zh (768d) GGUF+ONNX ready" $FILES
           echo "published: $TAG"
