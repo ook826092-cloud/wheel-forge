@@ -1,0 +1,54 @@
+name: build-llama-ndk
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ndk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      NDK_VERSION: "29.0.14206865"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: master
+      - uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: temurin
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+      - name: Install NDK
+        run: |
+          sdkmanager "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK=${ANDROID_SDK_ROOT}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+      - name: Build with NDK (official method, .so + binaries)
+        run: |
+          cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_OPENMP=OFF \
+            -DGGML_LLAMAFILE=OFF \
+            -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=ON
+          time cmake --build build --config Release -j $(nproc)
+          cmake --install build --prefix pkg-adb/llama.cpp
+          echo "=== 产物 ==="
+          find pkg-adb -type f | head -30
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=llama-cpp-android-arm64-ndk
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "llama.cpp Android arm64-v8a (NDK, official method)" pkg-adb/llama.cpp/
+          echo "published: $TAG"
