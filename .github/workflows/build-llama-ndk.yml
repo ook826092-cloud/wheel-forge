@@ -50,5 +50,7 @@ jobs:
         run: |
           TAG=llama-cpp-android-arm64-ndk
           gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
-          gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "llama.cpp Android arm64-v8a (NDK, official method)" pkg-adb/llama.cpp/
+          FILES="$(find pkg-adb -type f \( -path '*/bin/*' -o -name '*.so' \) | tr '\n' ' ')"
+          echo "上传文件: $FILES"
+          gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "llama.cpp Android arm64-v8a (NDK)" $FILES
           echo "published: $TAG"
