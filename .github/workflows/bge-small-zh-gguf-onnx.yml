@@ -32,13 +32,13 @@ jobs:
         run: |
           pip install --quiet transformers
           python - <<'PY'
-          import hashlib, sys
-          sys.path.insert(0, 'llama.cpp')
+          import hashlib, sys, os
+          os.chdir('llama.cpp')  # 官方脚本用相对路径，必须 cd 到 llama.cpp
           from convert_hf_to_gguf_update import CHK_TXT
           from transformers import AutoTokenizer
-          p = 'llama.cpp/conversion/base.py'
+          p = 'conversion/base.py'
           src = open(p).read()
-          tok = AutoTokenizer.from_pretrained('./bge-model')
+          tok = AutoTokenizer.from_pretrained('../bge-model')
           chkhsh = hashlib.sha256(str(tok.encode(CHK_TXT)).encode()).hexdigest()
           print('computed hash:', chkhsh)
           if chkhsh not in src:
