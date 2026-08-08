@@ -2,6 +2,9 @@ name: build-bge-small-zh-gguf-onnx
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,7 +15,7 @@ jobs:
           python-version: '3.12'
       - name: Install deps
         run: |
-          pip install --quiet huggingface_hub torch optimum[exporters] transformers
+          pip install --quiet huggingface_hub torch optimum[exporters] transformers sentence-transformers onnxruntime
       - name: Download ORIGINAL BAAI/bge-small-zh-v1.5 from HuggingFace
         run: |
           python - <<'PY'
@@ -21,11 +24,11 @@ jobs:
           print('downloaded to', p)
           PY
           ls -la ./bge-model
-      - name: Clone llama.cpp converter (on runner, not local)
+      - name: Clone llama.cpp converter (on runner)
         run: |
           git clone --depth 1 https://github.com/ggml-org/llama.cpp
           pip install --quiet -e ./llama.cpp/gguf-py
-      - name: Patch BERT tokenizer hash (bge uses WordPiece, may not be registered)
+      - name: Patch BERT tokenizer hash (bge uses WordPiece)
         run: |
           python - <<'PY'
           p = 'llama.cpp/conversion/base.py'
@@ -46,10 +49,21 @@ jobs:
           python llama.cpp/convert_hf_to_gguf.py ./bge-model --outtype f16 --outfile bge-small-zh-v1.5-f16.gguf
           python llama.cpp/convert_hf_to_gguf.py ./bge-model --outtype q8_0 --outfile bge-small-zh-v1.5-q8_0.gguf
           ls -la *.gguf
-      - name: Convert to ONNX (for onnxruntime)
+      - name: Convert to ONNX (sentence-similarity, includes pooling+normalize)
         run: |
-          optimum-cli export onnx --model ./bge-model --task feature-extraction ./bge-onnx
+          optimum-cli export onnx --model ./bge-model --task sentence-similarity ./bge-onnx
           find ./bge-onnx -type f | head -20
+      - name: Quantize ONNX to int8 (arm64-friendly)
+        run: |
+          python - <<'PY'
+          from optimum.onnxruntime import ORTQuantizer
+          from optimum.onnxruntime.configuration import AutoQuantizationConfig
+          quantizer = ORTQuantizer.from_pretrained('./bge-onnx')
+          dq = AutoQuantizationConfig.arm64(is_static=False)
+          quantizer.quantize(save_dir='./bge-onnx-q8', quantization_config=dq)
+          print('quantized ok')
+          PY
+          ls -la ./bge-onnx-q8
       - name: Publish Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,6 +71,7 @@ jobs:
           TAG=bge-small-zh-v1.5-gguf-onnx
           gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
           FILES="bge-small-zh-v1.5-f16.gguf bge-small-zh-v1.5-q8_0.gguf"
-          FILES="$FILES $(find ./bge-onnx -type f | tr '\n' ' ')"
+          FILES="$FILES $(find ./bge-onnx -type f -name '*.onnx' | tr '\n' ' ')"
+          FILES="$FILES $(find ./bge-onnx-q8 -type f -name '*.onnx' | tr '\n' ' ')"
           gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "bge-small-zh-v1.5 GGUF+ONNX (from BAAI original)" $FILES
           echo "published: $TAG"
