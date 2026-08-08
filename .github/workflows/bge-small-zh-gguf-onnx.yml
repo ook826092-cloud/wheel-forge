@@ -31,19 +31,21 @@ jobs:
       - name: Patch BERT tokenizer hash (bge uses WordPiece)
         run: |
           python - <<'PY'
-          import re
           p = 'llama.cpp/conversion/base.py'
           src = open(p).read()
           h = '56a3532a4cda32cf10d09834e0cdeee45c407d750b868651e44e2eebdcc721ed'
           if h not in src:
-              # 正则定位 get_vocab_base_pre 函数签名结束（含多行参数），在冒号后插入
-              m = re.search(r'def get_vocab_base_pre\([^)]*\)\s*:', src, re.S)
-              if not m:
-                  raise SystemExit('get_vocab_base_pre not found')
-              ins = '\n    if chkhsh == "' + h + '":\n        return "bert"\n'
-              src = src[:m.end()] + ins + src[m.end():]
+              # 字符串定位 get_vocab_base_pre 签名结束 '):'（避开正则转义问题）
+              idx = src.find('def get_vocab_base_pre')
+              if idx == -1:
+                  raise SystemExit('def not found')
+              eol = src.find('):', idx)
+              if eol == -1:
+                  raise SystemExit('): not found')
+              ins = '\n        if chkhsh == "' + h + '":\n            return "bert"\n'
+              src = src[:eol+2] + ins + src[eol+2:]
               open(p, 'w').write(src)
-              print('patched (after function signature)')
+              print('patched (after ): at', eol)
           else:
               print('hash already present')
           PY
