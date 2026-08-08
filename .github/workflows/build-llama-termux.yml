@@ -1,0 +1,61 @@
+name: build-llama-termux
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Add llama.cpp package build.sh
+        run: |
+          mkdir -p packages/llama.cpp
+          cat > packages/llama.cpp/build.sh <<'SH'
+TERMUX_PKG_HOMEPAGE=https://github.com/ggml-org/llama.cpp
+TERMUX_PKG_DESCRIPTION="State-of-the-art LLM inference in C/C++ (Termux/Android)"
+TERMUX_PKG_LICENSE="MIT"
+TERMUX_PKG_MAINTAINER="@termux"
+TERMUX_PKG_VERSION="b5000"
+TERMUX_PKG_SRCURL=git+https://github.com/ggml-org/llama.cpp
+TERMUX_PKG_GIT_BRANCH=master
+TERMUX_PKG_BUILD_IN_SRC=true
+TERMUX_PKG_CMAKE_BUILDER=true
+TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
+-DLLAMA_BUILD_TESTS=OFF
+-DLLAMA_BUILD_EXAMPLES=ON
+-DLLAMA_BUILD_SERVER=ON
+-DLLAMA_CURL=OFF
+-DBUILD_SHARED_LIBS=ON
+"
+SH
+          cat packages/llama.cpp/build.sh
+      - name: Load Docker image (official termux build env)
+        run: ./scripts/run-docker.sh true
+      - name: Build llama.cpp (official build system, aarch64)
+        run: |
+          set -o pipefail
+          ./scripts/run-docker.sh -d ./build-package.sh -I -C -a aarch64 llama.cpp 2>&1 | tail -25
+      - name: Collect + Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p out
+          cp $(find . -name "llama*.deb" 2>/dev/null | head -3) out/ 2>/dev/null || echo "no deb"
+          find . -name "llama*.deb" | head -3
+          ls -la out/ 2>/dev/null
+          TAG=llama-cpp-termux-aarch64
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(find . -name 'llama*.deb' | tr '\n' ' ')"
+          if [ -n "$FILES" ]; then
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "llama.cpp for Termux aarch64" $FILES
+            echo "published: $TAG"
+          else
+            echo "no deb found"; exit 1
+          fi
