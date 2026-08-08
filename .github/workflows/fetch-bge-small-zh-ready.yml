@@ -1,0 +1,42 @@
+name: fetch-bge-small-zh-ready
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install --quiet huggingface_hub
+      - name: Download GGUF (CompendiumLabs, from BAAI original)
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          p = snapshot_download('CompendiumLabs/bge-small-zh-v1.5-gguf', local_dir='./gguf', allow_patterns=['*.gguf'])
+          print('gguf:', p)
+          PY
+          ls -la ./gguf
+      - name: Download ONNX (onnx-community, HF official onnx org)
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          p = snapshot_download('onnx-community/bge-small-zh-v1.5-ONNX', local_dir='./onnx')
+          print('onnx:', p)
+          PY
+          find ./onnx -type f | head -20
+      - name: Publish Release (community ready, no conversion)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=bge-small-zh-v1.5-gguf-onnx-ready
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(find ./gguf -name '*.gguf' | tr '\n' ' ') $(find ./onnx -type f \( -name '*.onnx' -o -name '*.json' -o -name '*.txt' -o -name '*.model' \) | tr '\n' ' ')"
+          gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "bge-small-zh-v1.5 GGUF+ONNX (community ready)" $FILES
+          echo "published: $TAG"
