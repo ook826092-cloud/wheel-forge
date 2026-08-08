@@ -39,3 +39,17 @@ jobs:
             out/**
             debs/**
           if-no-files-found: warn
+      - name: Publish Release (for accelerated download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=tokenizers-termux-aarch64
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(find . -name '*.deb' | tr '\n' ' ')"
+          if [ -n "$FILES" ]; then
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "python-tokenizers for Termux aarch64" $FILES
+            echo "published: $TAG"
+          else
+            echo "no deb found, skip release"
+            exit 1
+          fi
