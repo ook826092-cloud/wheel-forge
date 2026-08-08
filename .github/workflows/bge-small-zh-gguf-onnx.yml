@@ -28,18 +28,16 @@ jobs:
       - name: Patch BERT tokenizer hash (bge uses WordPiece, may not be registered)
         run: |
           python - <<'PY'
-          import re
           p = 'llama.cpp/conversion/base.py'
           src = open(p).read()
-          if '56a3532a4cda32cf10d09834e0cdeee45c407d750b868651e44e2eebdcc721ed' not in src:
-              marker = '        raise NotImplementedError(\n            "BPE pre-tokenizer was not recognized'
-              patch = '        if chkhsh == "56a3532a4cda32cf10d09834e0cdeee45c407d750b868651e44e2eebdcc721ed":\n            return "bert"\n'
-              if marker in src:
-                  src = src.replace(marker, patch + marker, 1)
-                  open(p, 'w').write(src)
-                  print('patched tokenizer hash')
-              else:
-                  print('marker not found, trying after any raise NotImplementedError')
+          h = '56a3532a4cda32cf10d09834e0cdeee45c407d750b868651e44e2eebdcc721ed'
+          if h not in src:
+              idx = src.find('def get_vocab_base_pre')
+              eol = src.find('\n', idx)
+              ins = '\n    if chkhsh == "' + h + '":\n        return "bert"\n'
+              src = src[:eol+1] + ins + src[eol+1:]
+              open(p, 'w').write(src)
+              print('patched (insert after def get_vocab_base_pre)')
           else:
               print('hash already present')
           PY
