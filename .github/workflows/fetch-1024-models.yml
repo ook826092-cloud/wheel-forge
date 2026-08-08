@@ -1,0 +1,49 @@
+name: fetch-1024-models
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet huggingface_hub
+      - name: Fetch Qwen3-Embedding-0.6B (onnx-community)
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download('onnx-community/Qwen3-Embedding-0.6B-ONNX', local_dir='./qwen3')
+          PY
+          find ./qwen3 -type f -exec ls -la {} \; | head -15
+      - name: Fetch stella-large-zh-v2 (onnx-community)
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download('onnx-community/stella-large-zh-v2-ONNX', local_dir='./stella')
+          PY
+          find ./stella -type f -exec ls -la {} \; | head -15
+      - name: Fetch bge-large-zh (Xenova)
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download('Xenova/bge-large-zh', local_dir='./bgelarge')
+          PY
+          find ./bgelarge -type f -exec ls -la {} \; | head -15
+      - name: Publish Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for pair in "qwen3 qwen3-embedding-0.6b-onnx-ready Qwen3-Embedding-0.6B-ONNX" "stella stella-large-zh-v2-onnx-ready stella-large-zh-v2-ONNX" "bgelarge bge-large-zh-onnx-ready bge-large-zh-ONNX"; do
+            set -- $pair
+            dir=$1; tag=$2; title=$3
+            gh release delete "$tag" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+            FILES="$(find ./$dir -type f ! -name '*.lock' | tr '\n' ' ')"
+            gh release create "$tag" --repo "${GITHUB_REPOSITORY}" --title "$title" $FILES
+            echo "published: $tag"
+          done
