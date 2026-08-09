@@ -1,0 +1,55 @@
+name: build-tokenizers-tiktoken-termux
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: master
+      - name: Get TUR build.sh
+        run: |
+          mkdir -p packages/python-tokenizers packages/python-tiktoken
+          curl -sL -o packages/python-tokenizers/build.sh https://raw.githubusercontent.com/termux-user-repository/tur/master/tur/python-tokenizers/build.sh
+          curl -sL -o packages/python-tiktoken/build.sh https://raw.githubusercontent.com/termux-user-repository/tur/master/tur/python-tiktoken/build.sh
+          ls -la packages/python-tokenizers/build.sh packages/python-tiktoken/build.sh
+      - name: Load docker image (official)
+        run: ./scripts/run-docker.sh true
+      - name: Build tokenizers (official flow)
+        run: |
+          set -o pipefail
+          ./scripts/run-docker.sh -d ./build-package.sh -I -C -a aarch64 python-tokenizers 2>&1 | tail -10
+      - name: Build tiktoken (official flow)
+        run: |
+          set -o pipefail
+          ./scripts/run-docker.sh -d ./build-package.sh -I -C -a aarch64 python-tiktoken 2>&1 | tail -10
+      - name: Collect deb
+        run: |
+          mkdir -p collected
+          cp debs/*.deb collected/ 2>/dev/null || true
+          cp output/*.deb collected/ 2>/dev/null || true
+          find . -name '*.deb' | head -8
+          ls -la collected/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokenizers-tiktoken-termux
+          path: collected/**
+          if-no-files-found: warn
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=tokenizers-tiktoken-termux-aarch64
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          DEBS="$(find . -name '*.deb' | tr '\n' ' ')"
+          if [ -n "$DEBS" ]; then
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "python-tokenizers + python-tiktoken (Termux aarch64)" $DEBS 2>&1 | tail -2
+            echo "published: $TAG"
+          else echo "no deb"; exit 1; fi
