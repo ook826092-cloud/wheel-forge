@@ -1,0 +1,48 @@
+name: build-mem0-termux-deps
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull official termux docker image
+        run: docker pull termux/termux-docker:latest 2>&1 | tail -2
+      - name: Install mem0 deps inside termux container (auto-compile missing)
+        run: |
+          mkdir -p output
+          # 挂载 /output：容器编译产物提取到 Actions 主机（防丢失）
+          docker run --rm -v "$PWD/output:/output" termux/termux-docker:latest bash -c "
+            set -e
+            pkg update -y > /dev/null 2>&1
+            pkg install -y rust python python-pip clang binutils > /dev/null 2>&1
+            echo '--- pip install mem0ai (tokenizers/tiktoken 自动编译) ---'
+            pip install --user mem0ai 2>&1 | grep -iE 'building|successfully|error' | tail -8
+            echo '--- 提取编译产物到 /output ---'
+            # wheel 目录（编译好的 wheel 直接可复用）
+            pip wheel --no-deps -w /output tokenizers tiktoken 2>&1 | tail -3
+            # site-packages 的 .so（备用）
+            SP=\$(find ~/.local/lib -type d -name site-packages 2>/dev/null | head -1)
+            cp -r \$SP/tokenizers* \$SP/tiktoken* /output/ 2>/dev/null || true
+            echo '--- output 内容 ---'
+            ls -la /output/
+          " 2>&1 | tail -25
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la output/ | head -10
+          TAG=mem0-termux-deps
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(ls output/* 2>/dev/null | tr '\n' ' ')"
+          if [ -n "$FILES" ]; then
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "Mem0 Termux 依赖（tokenizers/tiktoken 编译产物）" $FILES
+            echo "published: $TAG"
+          else
+            echo "NO FILES FOUND"; ls -la output/; exit 1
+          fi
