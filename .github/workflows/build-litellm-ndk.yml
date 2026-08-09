@@ -1,0 +1,59 @@
+name: build-litellm-ndk
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ndk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      NDK_VERSION: "29.0.14206865"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: temurin
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+      - name: Install NDK
+        run: |
+          sdkmanager "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK=${ANDROID_SDK_ROOT}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+      - name: Setup Python + Rust
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Rust android target + NDK linker env
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup target add aarch64-linux-android
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          NDK_BIN=${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=${NDK_BIN}/aarch64-linux-android24-clang" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_AR=${NDK_BIN}/llvm-ar" >> $GITHUB_ENV
+      - name: Cross-compile litellm (NDK + maturin)
+        run: |
+          pip install maturin
+          pip download litellm --no-binary :all: --no-deps -d /tmp/src 2>&1 | tail -2
+          cd /tmp/src && tar xzf litellm-*.tar.gz && cd litellm-*
+          maturin build --release --target aarch64-linux-android --out /tmp/out 2>&1 | tail -10
+          ls -la /tmp/out/
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p out && cp /tmp/out/*.whl out/ 2>/dev/null || true
+          TAG=litellm-termux-aarch64
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(ls out/*.whl 2>/dev/null | tr '\n' ' ')"
+          if [ -n "$FILES" ]; then
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "litellm (Termux aarch64 NDK 交叉编译)" $FILES
+            echo "published: $TAG"
+          else echo "no wheel"; ls -la /tmp/out/ 2>/dev/null; exit 1; fi
