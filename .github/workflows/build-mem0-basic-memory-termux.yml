@@ -1,0 +1,84 @@
+name: build-mem0-basic-memory-termux
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-mem0:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull termux docker
+        run: docker pull termux/termux-docker:latest 2>&1 | tail -1
+      - name: Full deploy mem0ai in container + extract all artifacts
+        run: |
+          mkdir -p output
+          docker run --rm -v "$PWD/output:/output" termux/termux-docker:latest bash -c "
+            set -e
+            pkg update -y > /dev/null 2>&1
+            pkg install -y rust python python-pip clang binutils > /dev/null 2>&1
+            pip install -U maturin 2>&1 | tail -1
+            echo '=== 完整部署 mem0ai（缺依赖自动编译）==='
+            pip install --user mem0ai 2>&1 | tail -3
+            echo '=== 提取全部产物 ==='
+            SP=\$(find ~/.local/lib -type d -name site-packages 2>/dev/null | head -1)
+            echo \"site-packages: \$SP\"
+            # 1. 所有编译的 .so
+            find \$SP -name '*.so' -exec cp {} /output/ \; 2>/dev/null || true
+            # 2. 所有依赖的 wheel（含编译的）
+            pip wheel -w /output mem0ai 2>&1 | tail -2 || true
+            ls /output/ | wc -l; echo '个文件'
+          " 2>&1 | tail -15
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=mem0-termux-deps
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(ls output/* 2>/dev/null | tr '\n' ' ')"
+          if [ -n "$FILES" ]; then
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "Mem0 Termux 全依赖产物" $FILES
+            echo "published mem0: $TAG ($(ls output/ | wc -l) files)"
+          else
+            echo "NO FILES"; exit 1
+          fi
+
+  build-basic-memory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull termux docker
+        run: docker pull termux/termux-docker:latest 2>&1 | tail -1
+      - name: Full deploy basic-memory in container + extract all artifacts
+        run: |
+          mkdir -p output2
+          docker run --rm -v "$PWD/output2:/output" termux/termux-docker:latest bash -c "
+            set -e
+            pkg update -y > /dev/null 2>&1
+            pkg install -y rust python python-pip clang binutils > /dev/null 2>&1
+            pip install -U maturin 2>&1 | tail -1
+            echo '=== 完整部署 basic-memory ==='
+            pip install --user basic-memory 2>&1 | tail -3
+            echo '=== 提取全部产物 ==='
+            SP=\$(find ~/.local/lib -type d -name site-packages 2>/dev/null | head -1)
+            find \$SP -name '*.so' -exec cp {} /output/ \; 2>/dev/null || true
+            pip wheel -w /output basic-memory 2>&1 | tail -2 || true
+            ls /output/ | wc -l; echo '个文件'
+          " 2>&1 | tail -15
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=basic-memory-termux-deps
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(ls output2/* 2>/dev/null | tr '\n' ' ')"
+          if [ -n "$FILES" ]; then
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "Basic Memory Termux 全依赖产物" $FILES
+            echo "published bm: $TAG ($(ls output2/ | wc -l) files)"
+          else
+            echo "NO FILES"; exit 1
+          fi
