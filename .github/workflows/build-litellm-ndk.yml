@@ -17,7 +17,7 @@ jobs:
         with:
           java-version: 17
           distribution: temurin
-      - name: Setup Android SDK
+      - name: Setup Android SDK + NDK
         uses: android-actions/setup-android@v4
         with:
           log-accepted-android-sdk-licenses: false
@@ -25,11 +25,7 @@ jobs:
         run: |
           sdkmanager "ndk;${{ env.NDK_VERSION }}"
           echo "ANDROID_NDK=${ANDROID_SDK_ROOT}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
-      - name: Setup Python + Rust
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-      - name: Rust android target + NDK linker env
+      - name: Rust + NDK linker env
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           export PATH="$HOME/.cargo/bin:$PATH"
@@ -39,15 +35,20 @@ jobs:
           echo "CC_aarch64_linux_android=${NDK_BIN}/aarch64-linux-android24-clang" >> $GITHUB_ENV
           echo "AR_aarch64_linux_android=${NDK_BIN}/llvm-ar" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=${NDK_BIN}/aarch64-linux-android24-clang" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_AR=${NDK_BIN}/llvm-ar" >> $GITHUB_ENV
-          echo "CARGO_BUILD_TARGET=aarch64-linux-android" >> $GITHUB_ENV
-          echo "${NDK_BIN}" >> $GITHUB_PATH
-      - name: Cross-compile litellm (NDK + maturin)
+      - name: Download Android Python 3.14 (libpython for linking)
+        run: |
+          wget -q https://www.python.org/ftp/python/3.14.3/python-3.14.3-aarch64-linux-android.tar.gz -O /tmp/py.tgz
+          mkdir -p /tmp/py && tar xzf /tmp/py.tgz -C /tmp/py
+          ls /tmp/py/prefix/lib/ | head
+          echo "PYO3_CROSS=1" >> $GITHUB_ENV
+          echo "PYO3_CROSS_LIB_DIR=/tmp/py/prefix/lib" >> $GITHUB_ENV
+          echo "PYO3_CROSS_PYTHON_VERSION=3.14" >> $GITHUB_ENV
+      - name: Cross-compile litellm
         run: |
           pip install maturin
           pip download litellm --no-binary :all: --no-deps -d /tmp/src 2>&1 | tail -2
           cd /tmp/src && tar xzf litellm-*.tar.gz && cd litellm-*
-          maturin build --release --target aarch64-linux-android --out /tmp/out 2>&1 | tail -10
+          maturin build --release --target aarch64-linux-android --out /tmp/out 2>&1 | tail -12
           ls -la /tmp/out/
       - name: Publish Release
         env:
