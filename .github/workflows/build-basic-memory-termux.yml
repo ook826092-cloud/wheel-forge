@@ -1,0 +1,49 @@
+name: build-basic-memory-termux-deps
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull termux docker
+        run: docker pull termux/termux-docker:latest 2>&1 | tail -1
+      - name: Install basic-memory deps in container (auto-compile)
+        run: |
+          mkdir -p output
+          docker run --rm -v "$PWD/output:/output" termux/termux-docker:latest bash -c "
+            set -e
+            pkg update -y > /dev/null 2>&1
+            pkg install -y rust python python-pip clang binutils > /dev/null 2>&1
+            echo '--- pip install basic-memory (编译缺失依赖) ---'
+            pip install --user basic-memory 2>&1 | grep -iE 'building|successfully|error' | tail -8
+            echo '--- 提取编译产物 .so + wheel ---'
+            SP=\$(find ~/.local/lib -type d -name site-packages 2>/dev/null | head -1)
+            # 关键编译包（tokenizers/tiktoken/psutil/greenlet 等 .so）
+            for pkg in tokenizers tiktoken psutil greenlet; do
+              cp -r \$SP/\${pkg}* /output/ 2>/dev/null || true
+            done
+            # fastembed（若装成功）
+            cp -r \$SP/fastembed* \$SP/onnxruntime* /output/ 2>/dev/null || true
+            pip wheel --no-deps -w /output tokenizers tiktoken 2>&1 | tail -2 || true
+            echo '--- output ---'
+            ls -la /output/ | head -15
+          " 2>&1 | tail -20
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=basic-memory-termux-deps
+          gh release delete "$TAG" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          FILES="$(ls output/* 2>/dev/null | tr '\n' ' ')"
+          if [ -n "$FILES" ]; then
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "Basic Memory Termux 依赖（编译产物）" $FILES
+            echo "published: $TAG"
+          else
+            echo "NO FILES"; ls -la output/; exit 1
+          fi
